@@ -1,0 +1,26 @@
+# Core ML/Audio Processing
+torch>=2.0.0
+torchaudio>=2.0.0
+openai-whisper>=20231117
+transformers>=4.30.0
+librosa>=0.10.0
+soundfile>=0.12.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0,<2.0.0
+scikit-learn>=1.3.0
+scipy>=1.10.0
+
+# Utilities
+tqdm>=4.65.0
+python-dotenv>=1.0.0
+
+# Development (optional)
+jupyter>=1.0.0
+ipykernel>=6.25.0
+
+# For later phases
+peft>=0.5.0  # For LoRA fine-tuning
+flask>=2.3.0  # For API
+
