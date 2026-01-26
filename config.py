@@ -26,7 +26,7 @@ AUDIO_CONFIG = {
     "target_sample_rate": 16000,  # Whisper's native sample rate
     "mono": True,  # Convert to mono
     "normalize": True,  # Peak normalization to [-1, 1]
-    "trim_silence": False,  # User requested to skip this
+    "trim_silence": False,
     "min_duration": 0.5,  # Minimum duration in seconds
     "max_duration": 30.0,  # Maximum duration in seconds (Whisper limit)
 }
@@ -58,7 +58,7 @@ TEST_RATIO = 0.15
 RANDOM_SEED = 42
 
 # Whisper model settings
-WHISPER_MODEL = "base"  # Options: tiny, base, small, medium, large
+WHISPER_MODEL = "small"  # Options: tiny, base, small, medium, large
 
 # Processing settings
 BATCH_SIZE = 32  # For batch processing
