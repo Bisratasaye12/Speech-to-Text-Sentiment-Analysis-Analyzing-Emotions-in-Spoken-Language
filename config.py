@@ -17,6 +17,12 @@ SPLITS_DIR = DATA_DIR / "splits"
 # Source audio directory (CREMA-D)
 AUDIO_WAV_DIR = DATA_DIR / "AudioWAV"
 
+# Flask uploads (for API interface - Yord734)
+UPLOAD_FOLDER = PROCESSED_DATA_DIR / "uploads"
+UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+ALLOWED_EXTENSIONS = {"wav", "mp3", "m4a", "ogg", "flac"}
+MAX_CONTENT_LENGTH_MB = 50  # Max upload size in MB
+
 # Create directories if they don't exist
 for dir_path in [DATA_DIR, RAW_DATA_DIR, PROCESSED_DATA_DIR, AUDIO_DIR, SPLITS_DIR]:
     dir_path.mkdir(parents=True, exist_ok=True)
