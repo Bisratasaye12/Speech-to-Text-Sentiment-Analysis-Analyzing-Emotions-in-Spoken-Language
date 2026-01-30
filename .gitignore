@@ -30,9 +30,7 @@ models/
 *.ckpt
 *.bin
 
-# Jupyter
-.ipynb_checkpoints/
-*.ipynb
+
 
 # IDE
 .vscode/

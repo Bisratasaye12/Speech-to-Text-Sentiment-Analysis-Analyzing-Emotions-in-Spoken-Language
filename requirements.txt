@@ -15,6 +15,7 @@ scipy>=1.10.0
 # Utilities
 tqdm>=4.65.0
 python-dotenv>=1.0.0
+datasets>=2.0.0
 
 # Development (optional)
 jupyter>=1.0.0
