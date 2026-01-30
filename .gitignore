@@ -3,6 +3,7 @@
 venv/
 env/
 ENV/
+*.sh
 
 # Python
 __pycache__/

@@ -172,6 +172,7 @@ def load_text_emotion_model():
         
         # Try to load from checkpoint if available (prioritize trained models)
         checkpoint_paths = [
+            config.PROCESSED_DATA_DIR / "models" / "checkpoints" / "best_model_5epochs.pt",  # NEW: Best trained model
             config.PROCESSED_DATA_DIR / "text_model" / "best_model.pt",  # Primary trained model location
             config.PROCESSED_DATA_DIR / "models" / "checkpoints" / "best_model.pt",
             config.PROCESSED_DATA_DIR / "models" / "text_roberta_lora_best.pt",
