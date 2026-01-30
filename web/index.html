@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multimodal Emotion Analysis</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎭 Multimodal Emotion Analysis</h1>
+            <p class="subtitle">Analyze emotions from speech and text</p>
+        </header>
+
+        <!-- Audio Input Section -->
+        <section class="input-section">
+            <div class="input-card compact">
+                <div class="input-row">
+                    <!-- File Upload - Compact -->
+                    <div class="upload-area compact" id="uploadArea">
+                        <input type="file" id="fileInput" accept="audio/*" hidden>
+                        <div class="upload-content compact">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <span>Upload Audio</span>
+                        </div>
+                    </div>
+
+                    <!-- Recording Button - Compact -->
+                    <button id="recordBtn" class="record-btn compact">
+                        <span class="record-icon">🎤</span>
+                        <span class="record-text">Record</span>
+                    </button>
+                </div>
+
+                <!-- Recording Status -->
+                <div id="recordingStatus" class="recording-status hidden">
+                    <div class="pulse-dot"></div>
+                    <span>Recording...</span>
+                </div>
+
+                <!-- Waveform Visualization -->
+                <div id="waveformContainer" class="waveform-container hidden">
+                    <canvas id="waveformCanvas"></canvas>
+                </div>
+
+                <!-- Audio Player -->
+                <div id="audioPlayer" class="audio-player hidden">
+                    <audio id="audioElement" controls></audio>
+                </div>
+            </div>
+        </section>
+
+        <!-- Processing Status -->
+        <section id="processingSection" class="processing-section hidden">
+            <div class="processing-card">
+                <div class="spinner"></div>
+                <p>Analyzing audio...</p>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section id="resultsSection" class="results-section hidden">
+            <!-- Transcription -->
+            <div class="result-card transcription-card">
+                <h2>📝 Transcription</h2>
+                <div id="transcriptionText" class="transcription-text"></div>
+            </div>
+
+            <!-- Emotion Analysis -->
+            <div class="result-card emotion-card">
+                <h2>🎭 Emotion Analysis</h2>
+                <div id="audioEmotionDisplay" class="emotion-display">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+

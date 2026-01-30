@@ -15,7 +15,7 @@ AUDIO_DIR = PROCESSED_DATA_DIR / "audio"
 SPLITS_DIR = DATA_DIR / "splits"
 
 # Source audio directory (CREMA-D)
-AUDIO_WAV_DIR = PROJECT_ROOT / "AudioWAV"
+AUDIO_WAV_DIR = DATA_DIR / "AudioWAV"
 
 # Create directories if they don't exist
 for dir_path in [DATA_DIR, RAW_DATA_DIR, PROCESSED_DATA_DIR, AUDIO_DIR, SPLITS_DIR]:

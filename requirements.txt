@@ -15,6 +15,7 @@ scipy>=1.10.0
 # Utilities
 tqdm>=4.65.0
 python-dotenv>=1.0.0
+kaggle>=1.5.0  # For downloading datasets from Kaggle
 
 # Development (optional)
 jupyter>=1.0.0
@@ -23,4 +24,5 @@ ipykernel>=6.25.0
 # For later phases
 peft>=0.5.0  # For LoRA fine-tuning
 flask>=2.3.0  # For API
+flask-cors>=4.0.0  # For CORS support
 

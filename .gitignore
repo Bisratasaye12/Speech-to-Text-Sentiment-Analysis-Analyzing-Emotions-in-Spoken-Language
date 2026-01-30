@@ -15,6 +15,7 @@ dist/
 build/
 
 # Data files
+data/meld/
 data/raw/
 data/processed/audio/
 *.wav
