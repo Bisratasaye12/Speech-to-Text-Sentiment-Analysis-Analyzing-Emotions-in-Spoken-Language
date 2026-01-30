@@ -37,7 +37,7 @@ AUDIO_CONFIG = {
     "max_duration": 30.0,  # Maximum duration in seconds (Whisper limit)
 }
 
-# CREMA-D emotion mapping
+# CREMA-D / core emotion mapping (6-way)
 EMOTION_MAPPING = {
     "ANG": "anger",
     "DIS": "disgust",
@@ -46,6 +46,16 @@ EMOTION_MAPPING = {
     "NEU": "neutral",
     "SAD": "sad"
 }
+
+# Canonical 6-way emotion set used across the project
+CANONICAL_EMOTIONS = [
+    "anger",
+    "disgust",
+    "fear",
+    "happy",
+    "neutral",
+    "sad",
+]
 
 # Intensity mapping
 INTENSITY_MAPPING = {
@@ -69,4 +79,11 @@ WHISPER_MODEL = "small"  # Options: tiny, base, small, medium, large
 # Processing settings
 BATCH_SIZE = 32  # For batch processing
 NUM_WORKERS = 4  # For parallel processing (adjust based on CPU cores)
+
+# GoEmotions / text fine-tuning settings
+GOEMOTIONS_CONFIG = {
+    "dataset_name": "go_emotions",
+    "subset": "raw",  # standard GoEmotions subset
+}
+
 
