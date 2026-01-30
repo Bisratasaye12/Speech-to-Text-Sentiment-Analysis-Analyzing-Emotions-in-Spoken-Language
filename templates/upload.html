@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio Sentiment – Upload</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --surface: #18181c;
+      --surface-hover: #1f1f24;
+      --border: #2a2a32;
+      --text: #e4e4e7;
+      --text-muted: #71717a;
+      --accent: #a78bfa;
+      --accent-hover: #8b5cf6;
+      --success: #22c55e;
+      --error: #ef4444;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "DM Sans", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+      line-height: 1.6;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, var(--text) 0%, var(--text-muted) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      font-weight: 400;
+      max-width: 420px;
+      margin: 0 auto;
+    }
+
+    .card {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem;
+      box-shadow: var(--shadow);
+      margin-bottom: 1.5rem;
+    }
+
+    #uploadForm {
+      display: block;
+      width: 100%;
+    }
+
+    .upload-zone {
+      display: block;
+      width: 100%;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-sm);
+      padding: 2rem;
+      text-align: center;
+      transition: border-color 0.2s, background 0.2s;
+      cursor: pointer;
+      margin-bottom: 1.25rem;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .upload-zone:hover,
+    .upload-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(167, 139, 250, 0.06);
+    }
+
+    .upload-zone input[type="file"] {
+      position: absolute;
+      width: 0;
+      height: 0;
+      opacity: 0;
+      pointer-events: none;
+      outline: none;
+    }
+    .upload-zone input[type="file"]:focus {
+      outline: none;
+    }
+
+    .upload-zone .icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+      opacity: 0.9;
+    }
+
+    .upload-zone .prompt {
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 0.25rem;
+    }
+
+    .upload-zone .hint {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .file-name {
+      font-size: 0.9rem;
+      color: var(--accent);
+      margin-top: 0.75rem;
+      word-break: break-all;
+    }
+
+    button[type="submit"] {
+      width: 100%;
+      padding: 0.875rem 1.5rem;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    button[type="submit"]:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(167, 139, 250, 0.35);
+    }
+
+    button[type="submit"]:active {
+      transform: translateY(0);
+    }
+
+    button[type="submit"]:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    #result {
+      width: 100%;
+      min-height: 80px;
+      padding: 1.25rem;
+      border-radius: var(--radius-sm);
+      white-space: pre-wrap;
+      font-size: 0.875rem;
+      font-family: "SF Mono", "Consolas", "Monaco", monospace;
+      line-height: 1.5;
+      border: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.25);
+    }
+
+    #result:empty {
+      display: none;
+    }
+
+    #result.loading {
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    #result.success {
+      border-color: rgba(34, 197, 94, 0.4);
+      background: rgba(34, 197, 94, 0.08);
+    }
+
+    #result.error {
+      border-color: rgba(239, 68, 68, 0.4);
+      background: rgba(239, 68, 68, 0.08);
+      color: #fca5a5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Audio Sentiment</h1>
+      <p class="subtitle">Upload an audio file to transcribe and analyze emotion. Supports wav, mp3, m4a, ogg, flac.</p>
+    </header>
+
+    <div class="card">
+      <form id="uploadForm" enctype="multipart/form-data">
+        <label for="audio" class="upload-zone" id="uploadZone">
+          <input type="file" id="audio" name="file" accept=".wav,.mp3,.m4a,.ogg,.flac" required>
+          <div class="icon">🎙️</div>
+          <div class="prompt">Choose a file or drag it here</div>
+          <div class="hint">Max 50 MB · 0.5s – 30s duration</div>
+          <div class="file-name" id="fileName"></div>
+        </label>
+        <button type="submit" id="submitBtn">Process audio</button>
+      </form>
+    </div>
+
+    <div id="result"></div>
+  </div>
+
+  <script>
+    const form = document.getElementById("uploadForm");
+    const resultEl = document.getElementById("result");
+    const fileNameEl = document.getElementById("fileName");
+    const uploadZone = document.getElementById("uploadZone");
+    const audioInput = document.getElementById("audio");
+    const submitBtn = document.getElementById("submitBtn");
+
+    audioInput.addEventListener("change", () => {
+      const file = audioInput.files[0];
+      fileNameEl.textContent = file ? file.name : "";
+    });
+
+    uploadZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      uploadZone.classList.add("dragover");
+    });
+    uploadZone.addEventListener("dragleave", () => uploadZone.classList.remove("dragover"));
+    uploadZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      uploadZone.classList.remove("dragover");
+      if (e.dataTransfer.files.length) {
+        audioInput.files = e.dataTransfer.files;
+        fileNameEl.textContent = e.dataTransfer.files[0].name;
+      }
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      resultEl.textContent = "Processing…";
+      resultEl.className = "loading";
+      resultEl.style.display = "block";
+      submitBtn.disabled = true;
+
+      const formData = new FormData();
+      formData.append("file", audioInput.files[0]);
+
+      try {
+        const r = await fetch("/api/process", { method: "POST", body: formData });
+        const data = await r.json();
+        resultEl.textContent = JSON.stringify(data, null, 2);
+        resultEl.className = data.success ? "success" : "error";
+      } catch (err) {
+        resultEl.textContent = "Error: " + err.message;
+        resultEl.className = "error";
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

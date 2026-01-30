@@ -17,6 +17,7 @@ build/
 # Data files
 data/raw/
 data/processed/audio/
+data/processed/uploads/
 *.wav
 *.mp3
 *.flac
