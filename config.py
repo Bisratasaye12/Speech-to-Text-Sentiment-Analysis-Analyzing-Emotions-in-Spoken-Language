@@ -86,4 +86,34 @@ GOEMOTIONS_CONFIG = {
     "subset": "raw",  # standard GoEmotions subset
 }
 
+# Audio Model Selection
+# Options: "wav2vec2" (transformer-based) or "cnn_lstm" (classic CNN+LSTM)
+AUDIO_MODEL_TYPE = "cnn_lstm"  # Using CNN+LSTM model (56.40% accuracy vs 36% with Wav2Vec2)
+
+# CNN+LSTM Model Configuration
+CNNLSTM_CONFIG = {
+    "num_labels": len(CANONICAL_EMOTIONS),
+    "feature_dim": 37,  # 13 MFCCs + 12 chroma + 7 spectral_contrast + 1 rolloff + 1 bandwidth + 1 ZCR + 2 prosodic (f0, rms)
+    "cnn_channels": 64,
+    "lstm_hidden": 128,
+    "lstm_layers": 2,
+    "dropout": 0.3,
+    "use_batch_norm": True,
+}
+
+# Multimodal Fusion Model settings
+FUSION_CONFIG = {
+    "fusion_type": "late",  # Options: 'early', 'late', 'attention', 'weighted'
+    "fusion_hidden_dim": 512,  # Hidden dimension for fusion layers
+    "dropout": 0.3,  # Dropout probability for fusion layers
+    "text_embedding_dim": 768,  # RoBERTa-base hidden size (fixed)
+    # Fusion weights (for late/weighted fusion)
+    # Can be: "auto" (performance-based), "equal" (0.5/0.5), or [audio_weight, text_weight]
+    "fusion_weights": "auto",  # "auto", "equal", or [float, float] e.g. [0.7, 0.3]
+    # Minimum text model accuracy to use in fusion (if below this, use audio-only)
+    "min_text_accuracy": 0.25,  # If text accuracy < 25%, fallback to audio-only
+    # Note: audio_embedding_dim is determined dynamically from audio model config
+    # Note: num_labels is determined from CANONICAL_EMOTIONS
+}
+
 

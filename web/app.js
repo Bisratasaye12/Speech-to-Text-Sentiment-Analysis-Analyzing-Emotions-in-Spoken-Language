@@ -7,6 +7,7 @@ const fileInput = document.getElementById('fileInput');
 const uploadArea = document.getElementById('uploadArea');
 const recordBtn = document.getElementById('recordBtn');
 const recordingStatus = document.getElementById('recordingStatus');
+const micPermissionNote = document.getElementById('micPermissionNote');
 const waveformContainer = document.getElementById('waveformContainer');
 const waveformCanvas = document.getElementById('waveformCanvas');
 const audioPlayer = document.getElementById('audioPlayer');
@@ -39,7 +40,90 @@ document.addEventListener('DOMContentLoaded', () => {
     setupFileUpload();
     setupRecording();
     setupWaveform();
+    checkMicrophonePermission();
 });
+
+// Check microphone permission on page load (silent check, only show warnings)
+async function checkMicrophonePermission() {
+    try {
+        // Check if HTTPS or localhost (required for getUserMedia)
+        const isSecure = window.location.protocol === 'https:' || 
+                        window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1';
+        
+        if (!isSecure) {
+            micPermissionNote.classList.remove('hidden');
+            micPermissionNote.innerHTML = '<small>⚠️ Microphone access requires HTTPS. Please use HTTPS or localhost.</small>';
+            micPermissionNote.style.color = 'var(--warning)';
+        }
+        
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            console.warn('Microphone access not supported in this browser');
+            recordBtn.disabled = true;
+            recordBtn.title = 'Microphone access not supported. Please use a modern browser.';
+            recordBtn.style.opacity = '0.5';
+            recordBtn.style.cursor = 'not-allowed';
+            micPermissionNote.classList.remove('hidden');
+            micPermissionNote.innerHTML = '<small>⚠️ Microphone access not supported in this browser.</small>';
+            micPermissionNote.style.color = 'var(--error)';
+            return;
+        }
+        
+        // Only show permission note if there's an actual problem
+        // Don't show it for normal "prompt" state - that's expected behavior
+        if (navigator.permissions && navigator.permissions.query) {
+            try {
+                const permission = await navigator.permissions.query({ name: 'microphone' });
+                
+                if (permission.state === 'denied') {
+                    // Only show note if permission is denied
+                    recordBtn.disabled = true;
+                    recordBtn.title = 'Microphone access denied. Please enable it in browser settings.';
+                    recordBtn.style.opacity = '0.5';
+                    recordBtn.style.cursor = 'not-allowed';
+                    micPermissionNote.classList.remove('hidden');
+                    micPermissionNote.innerHTML = '<small>❌ Microphone access denied. Please enable it in browser settings.</small>';
+                    micPermissionNote.style.color = 'var(--error)';
+                } else {
+                    // Hide note for "prompt" or "granted" - these are normal states
+                    micPermissionNote.classList.add('hidden');
+                }
+                
+                // Listen for permission changes
+                permission.onchange = () => {
+                    if (permission.state === 'granted') {
+                        recordBtn.disabled = false;
+                        recordBtn.title = 'Click to start recording';
+                        recordBtn.style.opacity = '1';
+                        recordBtn.style.cursor = 'pointer';
+                        micPermissionNote.classList.add('hidden');
+                    } else if (permission.state === 'denied') {
+                        recordBtn.disabled = true;
+                        recordBtn.title = 'Microphone access denied. Please enable it in browser settings.';
+                        recordBtn.style.opacity = '0.5';
+                        recordBtn.style.cursor = 'not-allowed';
+                        micPermissionNote.classList.remove('hidden');
+                        micPermissionNote.innerHTML = '<small>❌ Microphone access denied. Please enable it in browser settings.</small>';
+                        micPermissionNote.style.color = 'var(--error)';
+                    } else {
+                        micPermissionNote.classList.add('hidden');
+                    }
+                };
+            } catch (permError) {
+                // Permissions API might not support 'microphone' name in some browsers
+                // This is fine - just hide the note and let the normal prompt work
+                micPermissionNote.classList.add('hidden');
+            }
+        } else {
+            // Permissions API not available - hide note, normal prompt will work
+            micPermissionNote.classList.add('hidden');
+        }
+    } catch (error) {
+        // Hide note on any error - normal prompt will work
+        console.log('Could not check microphone permission:', error);
+        micPermissionNote.classList.add('hidden');
+    }
+}
 
 // File Upload Setup
 function setupFileUpload() {
@@ -90,25 +174,74 @@ function setupRecording() {
 
 async function startRecording() {
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Check if getUserMedia is available
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('Microphone access is not supported in this browser. Please use a modern browser like Chrome, Firefox, or Safari.');
+        }
+
+        // Request microphone access with better error handling
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                sampleRate: 16000  // Match backend expected sample rate
+            } 
+        });
         
-        mediaRecorder = new MediaRecorder(stream);
+        // Determine the best MIME type for MediaRecorder
+        const mimeTypes = [
+            'audio/webm;codecs=opus',
+            'audio/webm',
+            'audio/ogg;codecs=opus',
+            'audio/mp4',
+            'audio/wav'
+        ];
+        
+        let selectedMimeType = 'audio/webm';
+        for (const mimeType of mimeTypes) {
+            if (MediaRecorder.isTypeSupported(mimeType)) {
+                selectedMimeType = mimeType;
+                break;
+            }
+        }
+        
+        // Create MediaRecorder with the best supported format
+        const options = { mimeType: selectedMimeType };
+        mediaRecorder = new MediaRecorder(stream, options);
         audioChunks = [];
 
         mediaRecorder.ondataavailable = (event) => {
-            audioChunks.push(event.data);
+            if (event.data.size > 0) {
+                audioChunks.push(event.data);
+            }
+        };
+
+        mediaRecorder.onerror = (event) => {
+            console.error('MediaRecorder error:', event.error);
+            stopRecording();
+            alert('Error during recording. Please try again.');
         };
 
         mediaRecorder.onstop = async () => {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-            const audioFile = new File([audioBlob], 'recording.wav', { type: 'audio/wav' });
-            handleAudioFile(audioFile);
-            
-            // Stop all tracks
-            stream.getTracks().forEach(track => track.stop());
+            try {
+                // Create blob from recorded chunks
+                const audioBlob = new Blob(audioChunks, { type: selectedMimeType });
+                
+                // Convert to WAV format for backend compatibility
+                const audioFile = await convertToWav(audioBlob, selectedMimeType);
+                handleAudioFile(audioFile);
+                
+                // Stop all tracks
+                stream.getTracks().forEach(track => track.stop());
+            } catch (error) {
+                console.error('Error processing recording:', error);
+                alert('Error processing recording. Please try again.');
+            }
         };
 
-        mediaRecorder.start();
+        // Start recording with timeslice for better chunk handling
+        mediaRecorder.start(100); // Collect data every 100ms
         isRecording = true;
         
         recordBtn.classList.add('recording');
@@ -120,27 +253,134 @@ async function startRecording() {
         
     } catch (error) {
         console.error('Error starting recording:', error);
-        alert('Error accessing microphone. Please check permissions.');
+        
+        let errorMessage = 'Error accessing microphone. ';
+        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+            errorMessage += 'Please allow microphone access in your browser settings and try again.';
+        } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+            errorMessage += 'No microphone found. Please connect a microphone and try again.';
+        } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+            errorMessage += 'Microphone is already in use by another application.';
+        } else if (error.name === 'OverconstrainedError' || error.name === 'ConstraintNotSatisfiedError') {
+            errorMessage += 'Microphone does not support required settings.';
+        } else {
+            errorMessage += error.message || 'Please check your browser permissions.';
+        }
+        
+        alert(errorMessage);
+        isRecording = false;
+        recordBtn.classList.remove('recording');
+        recordBtn.querySelector('.record-text').textContent = 'Record';
+        recordingStatus.classList.add('hidden');
     }
 }
 
 function stopRecording() {
     if (mediaRecorder && isRecording) {
-        mediaRecorder.stop();
+        try {
+            // Stop recording
+            if (mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+        } catch (error) {
+            console.error('Error stopping recording:', error);
+        }
+        
         isRecording = false;
         
         recordBtn.classList.remove('recording');
-        recordBtn.querySelector('.record-text').textContent = 'Start Recording';
+        recordBtn.querySelector('.record-text').textContent = 'Record';
         recordingStatus.classList.add('hidden');
         
         // Stop visualization
         if (animationFrame) {
             cancelAnimationFrame(animationFrame);
+            animationFrame = null;
         }
         if (audioContext) {
-            audioContext.close();
+            audioContext.close().catch(console.error);
+            audioContext = null;
+        }
+        if (analyser) {
+            analyser = null;
         }
     }
+}
+
+// Convert audio blob to WAV format for backend compatibility
+async function convertToWav(audioBlob, mimeType) {
+    try {
+        // If already WAV, return as-is
+        if (mimeType.includes('wav')) {
+            return new File([audioBlob], 'recording.wav', { type: 'audio/wav' });
+        }
+        
+        // Decode audio data
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        
+        // Convert to WAV
+        const wavBlob = audioBufferToWav(audioBuffer);
+        audioContext.close();
+        
+        return new File([wavBlob], 'recording.wav', { type: 'audio/wav' });
+    } catch (error) {
+        console.warn('Could not convert to WAV, sending original format:', error);
+        // Fallback: send original format
+        const extension = mimeType.includes('webm') ? 'webm' : 
+                         mimeType.includes('ogg') ? 'ogg' : 
+                         mimeType.includes('mp4') ? 'm4a' : 'wav';
+        return new File([audioBlob], `recording.${extension}`, { type: mimeType });
+    }
+}
+
+// Convert AudioBuffer to WAV Blob
+function audioBufferToWav(buffer) {
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const format = 1; // PCM
+    const bitDepth = 16;
+    
+    const bytesPerSample = bitDepth / 8;
+    const blockAlign = numChannels * bytesPerSample;
+    
+    const length = buffer.length;
+    const arrayBuffer = new ArrayBuffer(44 + length * numChannels * bytesPerSample);
+    const view = new DataView(arrayBuffer);
+    
+    // WAV header
+    const writeString = (offset, string) => {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+        }
+    };
+    
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + length * numChannels * bytesPerSample, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true); // fmt chunk size
+    view.setUint16(20, format, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitDepth, true);
+    writeString(36, 'data');
+    view.setUint32(40, length * numChannels * bytesPerSample, true);
+    
+    // Convert float samples to 16-bit PCM
+    let offset = 44;
+    for (let i = 0; i < length; i++) {
+        for (let channel = 0; channel < numChannels; channel++) {
+            const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
+            view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+            offset += 2;
+        }
+    }
+    
+    return new Blob([arrayBuffer], { type: 'audio/wav' });
 }
 
 function setupRecordingVisualization(stream) {
@@ -296,8 +536,9 @@ function displayResults(data) {
     // Transcription
     transcriptionText.textContent = data.transcription || 'No transcription available';
     
-    // Audio Emotion (only one emotion display now)
-    displayEmotions(data.audio_emotion, audioEmotionDisplay);
+    // Use fused_emotion (multimodal fusion) as primary display, fallback to audio_emotion
+    const primaryEmotion = data.fused_emotion || data.audio_emotion;
+    displayEmotions(primaryEmotion, audioEmotionDisplay);
     
     // Show results
     resultsSection.classList.remove('hidden');
