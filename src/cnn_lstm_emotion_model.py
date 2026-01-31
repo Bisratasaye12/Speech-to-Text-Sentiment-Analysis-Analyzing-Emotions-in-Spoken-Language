@@ -251,7 +251,7 @@ class CNNLSTMEmotionModel(nn.Module):
     
     def forward(self, features: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Forward pass.
+        Forward pass with memory-efficient processing.
         
         Args:
             features: (batch, time_frames, feature_dim) tensor
@@ -275,15 +275,21 @@ class CNNLSTMEmotionModel(nn.Module):
         # LSTM
         lstm_out, (h_n, c_n) = self.lstm(x)  # (batch, time', lstm_hidden * 2)
         
-        # Attention-based pooling
-        attention_weights = self.attention(lstm_out)  # (batch, time', 1)
-        attention_weights = torch.softmax(attention_weights, dim=1)
-        pooled = torch.sum(attention_weights * lstm_out, dim=1)  # (batch, lstm_hidden * 2)
-        
-        # Alternative: Use last hidden state if attention fails
-        if pooled.isnan().any():
-            # Use mean pooling as fallback
-            pooled = lstm_out.mean(dim=1)
+        # Memory-efficient attention: use mean pooling if sequence is too long
+        # This reduces memory usage for very long sequences
+        seq_len = lstm_out.shape[1]
+        if seq_len > 500:  # For very long sequences, use mean pooling
+            pooled = lstm_out.mean(dim=1)  # (batch, lstm_hidden * 2)
+        else:
+            # Attention-based pooling
+            attention_weights = self.attention(lstm_out)  # (batch, time', 1)
+            attention_weights = torch.softmax(attention_weights, dim=1)
+            pooled = torch.sum(attention_weights * lstm_out, dim=1)  # (batch, lstm_hidden * 2)
+            
+            # Alternative: Use last hidden state if attention fails
+            if pooled.isnan().any():
+                # Use mean pooling as fallback
+                pooled = lstm_out.mean(dim=1)
         
         # Get embedding for fusion
         embedding = pooled

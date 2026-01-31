@@ -52,7 +52,7 @@ from src.audio_augmentation import AudioAugmentation
 
 
 class AugmentedCREMAAudioEmotionDataset(CREMAAudioEmotionDataset):
-    """Dataset with augmentation support"""
+    """Dataset with augmentation support - works with both CREMA-D and multi-dataset"""
     
     def __init__(self, *args, augment: bool = False, aug_config=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -62,6 +62,33 @@ class AugmentedCREMAAudioEmotionDataset(CREMAAudioEmotionDataset):
         from src.audio_features import extract_prosodic_features, prosodic_feature_vector
         self.extract_prosodic_features = extract_prosodic_features
         self.prosodic_feature_vector = prosodic_feature_vector
+        
+        # Update paths for multi-dataset if needed
+        if hasattr(self, 'df') and 'dataset' in self.df.columns:
+            # Re-resolve paths for multi-dataset
+            self.paths = []
+            for idx, row in self.df.iterrows():
+                p = row[self.audio_col]
+                path = Path(p)
+                if not path.is_absolute():
+                    dataset = row.get("dataset", "CREMA-D")
+                    if dataset == "CREMA-D":
+                        path = config.PROCESSED_DATA_DIR / path
+                    elif dataset == "TESS":
+                        if (config.AUDIO_DIR / f"TESS_{path.name}").exists():
+                            path = config.AUDIO_DIR / f"TESS_{path.name}"
+                        elif (config.RAW_DATA_DIR / "TESS" / path.name).exists():
+                            path = config.RAW_DATA_DIR / "TESS" / path.name
+                        else:
+                            path = config.PROCESSED_DATA_DIR / path
+                    elif dataset == "IEMOCAP":
+                        if (config.AUDIO_DIR / f"IEMOCAP_{path.name}").exists():
+                            path = config.AUDIO_DIR / f"IEMOCAP_{path.name}"
+                        else:
+                            path = config.PROCESSED_DATA_DIR / path
+                    else:
+                        path = config.PROCESSED_DATA_DIR / path
+                self.paths.append(path)
     
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         path = self.paths[idx]
@@ -248,16 +275,22 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Improved training for audio emotion recognition"
     )
+    # Check for multi-dataset splits first, then fallback to CREMA-D
+    multi_dataset_train = config.SPLITS_DIR / "multi_dataset" / "train.csv"
+    multi_dataset_val = config.SPLITS_DIR / "multi_dataset" / "val.csv"
+    default_train = str(multi_dataset_train if multi_dataset_train.exists() else config.SPLITS_DIR / "train.csv")
+    default_val = str(multi_dataset_val if multi_dataset_val.exists() else config.SPLITS_DIR / "val.csv")
+    
     parser.add_argument(
         "--train_csv",
         type=str,
-        default=str(config.SPLITS_DIR / "train.csv"),
+        default=default_train,
         help="Path to training split CSV",
     )
     parser.add_argument(
         "--val_csv",
         type=str,
-        default=str(config.SPLITS_DIR / "val.csv"),
+        default=default_val,
         help="Path to validation split CSV",
     )
     parser.add_argument(

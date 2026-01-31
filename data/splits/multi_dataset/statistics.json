@@ -1,0 +1,55 @@
+{
+  "total_samples": 4799,
+  "train_samples": 3359,
+  "val_samples": 720,
+  "test_samples": 720,
+  "balancing_strategy": "equal_per_emotion",
+  "dataset_distribution": {
+    "TESS": 4103,
+    "IEMOCAP": 697
+  },
+  "emotion_distribution": {
+    "disgust": 800,
+    "neutral": 800,
+    "happy": 800,
+    "sad": 800,
+    "fear": 800,
+    "anger": 800
+  },
+  "train_emotion_distribution": {
+    "fear": 560,
+    "happy": 560,
+    "disgust": 560,
+    "anger": 560,
+    "sad": 560,
+    "neutral": 559
+  },
+  "val_emotion_distribution": {
+    "neutral": 120,
+    "disgust": 120,
+    "sad": 120,
+    "anger": 120,
+    "happy": 120,
+    "fear": 120
+  },
+  "test_emotion_distribution": {
+    "disgust": 120,
+    "happy": 120,
+    "anger": 120,
+    "neutral": 120,
+    "fear": 120,
+    "sad": 120
+  },
+  "train_dataset_distribution": {
+    "TESS": 2872,
+    "IEMOCAP": 487
+  },
+  "val_dataset_distribution": {
+    "TESS": 617,
+    "IEMOCAP": 103
+  },
+  "test_dataset_distribution": {
+    "TESS": 614,
+    "IEMOCAP": 106
+  }
+}

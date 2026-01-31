@@ -10,6 +10,7 @@ This classic approach often outperforms transformer-based models for emotion rec
 
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -71,12 +72,36 @@ class EmotionDataset(Dataset):
         if "emotion" not in self.df.columns:
             raise ValueError(f"'emotion' column not found in {csv_path}")
         
-        # Pre-resolve absolute paths
+        # Pre-resolve absolute paths (support multi-dataset)
         self.paths: List[Path] = []
-        for p in self.df[self.audio_col].tolist():
+        for idx, row in self.df.iterrows():
+            p = row[self.audio_col]
             path = Path(p)
+            
             if not path.is_absolute():
-                path = PROCESSED_DATA_DIR / path
+                # Check if this is a multi-dataset CSV
+                dataset = row.get("dataset", "CREMA-D") if "dataset" in row else "CREMA-D"
+                if dataset == "CREMA-D":
+                    path = PROCESSED_DATA_DIR / path
+                elif dataset == "TESS":
+                    # Try processed first, then raw
+                    audio_dir = config.AUDIO_DIR
+                    if (audio_dir / f"TESS_{path.name}").exists():
+                        path = audio_dir / f"TESS_{path.name}"
+                    elif (config.RAW_DATA_DIR / "TESS" / path.name).exists():
+                        path = config.RAW_DATA_DIR / "TESS" / path.name
+                    else:
+                        path = PROCESSED_DATA_DIR / path
+                elif dataset == "IEMOCAP":
+                    # Try processed first
+                    audio_dir = config.AUDIO_DIR
+                    if (audio_dir / f"IEMOCAP_{path.name}").exists():
+                        path = audio_dir / f"IEMOCAP_{path.name}"
+                    else:
+                        path = PROCESSED_DATA_DIR / path
+                else:
+                    path = PROCESSED_DATA_DIR / path
+            
             self.paths.append(path)
         
         # Pre-compute label ids
@@ -149,22 +174,71 @@ def train_epoch(
     all_preds = []
     all_labels = []
     
-    for features, labels in tqdm(dataloader, desc="Training"):
-        features = features.to(device)
-        labels = labels.to(device)
+    # Clear MPS cache before training
+    if device.type == "mps":
+        torch.mps.empty_cache()
+    
+    for batch_idx, (features, labels) in enumerate(tqdm(dataloader, desc="Training")):
+        # For MPS, process smaller sub-batches if needed
+        if device.type == "mps" and features.shape[0] > 4:
+            # Split large batches into smaller chunks
+            chunk_size = 4
+            batch_loss = 0.0
+            batch_preds = []
+            batch_labels = []
+            
+            for chunk_start in range(0, features.shape[0], chunk_size):
+                chunk_end = min(chunk_start + chunk_size, features.shape[0])
+                chunk_features = features[chunk_start:chunk_end].to(device)
+                chunk_labels = labels[chunk_start:chunk_end].to(device)
+                
+                optimizer.zero_grad()
+                logits, _ = model(chunk_features)
+                loss = criterion(logits, chunk_labels)
+                
+                loss.backward()
+                optimizer.step()
+                
+                batch_loss += loss.item()
+                preds = torch.argmax(logits, dim=-1).cpu().numpy()
+                batch_preds.extend(preds)
+                batch_labels.extend(chunk_labels.cpu().numpy())
+                
+                # Clear immediately
+                del logits, loss, chunk_features, chunk_labels
+                torch.mps.empty_cache()
+            
+            total_loss += batch_loss / (features.shape[0] / chunk_size)
+            all_preds.extend(batch_preds)
+            all_labels.extend(batch_labels)
+        else:
+            # Normal processing for small batches or non-MPS
+            features = features.to(device)
+            labels = labels.to(device)
+            
+            optimizer.zero_grad()
+            
+            logits, _ = model(features)
+            loss = criterion(logits, labels)
+            
+            loss.backward()
+            optimizer.step()
+            
+            total_loss += loss.item()
+            preds = torch.argmax(logits, dim=-1).cpu().numpy()
+            all_preds.extend(preds)
+            all_labels.extend(labels.cpu().numpy())
+            
+            # Move tensors off GPU immediately
+            del logits, loss, features, labels
         
-        optimizer.zero_grad()
-        
-        logits, _ = model(features)
-        loss = criterion(logits, labels)
-        
-        loss.backward()
-        optimizer.step()
-        
-        total_loss += loss.item()
-        preds = torch.argmax(logits, dim=-1).cpu().numpy()
-        all_preds.extend(preds)
-        all_labels.extend(labels.cpu().numpy())
+        # Aggressive cache clearing every batch for MPS
+        if device.type == "mps":
+            torch.mps.empty_cache()
+            if (batch_idx + 1) % 3 == 0:  # Every 3 batches
+                import gc
+                gc.collect()
+                torch.mps.empty_cache()
     
     avg_loss = total_loss / len(dataloader)
     accuracy = accuracy_score(all_labels, all_preds)
@@ -183,24 +257,56 @@ def validate(
     criterion: nn.Module,
     device: torch.device,
 ) -> Dict[str, float]:
-    """Validate model"""
+    """Validate model with memory-efficient processing"""
     model.eval()
     total_loss = 0.0
     all_preds = []
     all_labels = []
     
+    # Clear MPS cache before validation
+    if device.type == "mps":
+        torch.mps.empty_cache()
+        import gc
+        gc.collect()
+    
     with torch.no_grad():
-        for features, labels in tqdm(dataloader, desc="Validating"):
-            features = features.to(device)
-            labels = labels.to(device)
-            
-            logits, _ = model(features)
-            loss = criterion(logits, labels)
-            
-            total_loss += loss.item()
-            preds = torch.argmax(logits, dim=-1).cpu().numpy()
-            all_preds.extend(preds)
-            all_labels.extend(labels.cpu().numpy())
+        # Process validation in very small batches or one at a time for MPS
+        if device.type == "mps":
+            # Process one sample at a time to minimize memory
+            for features, labels in tqdm(dataloader, desc="Validating"):
+                # Process each sample in batch individually
+                batch_size = features.shape[0]
+                for i in range(batch_size):
+                    single_feature = features[i:i+1].to(device)
+                    single_label = labels[i:i+1].to(device)
+                    
+                    logits, _ = model(single_feature)
+                    loss = criterion(logits, single_label)
+                    
+                    total_loss += loss.item()
+                    preds = torch.argmax(logits, dim=-1).cpu().numpy()
+                    all_preds.extend(preds)
+                    all_labels.extend(single_label.cpu().numpy())
+                    
+                    # Clear immediately
+                    del logits, loss, single_feature, single_label
+                    torch.mps.empty_cache()
+        else:
+            # Normal processing for CUDA/CPU
+            for features, labels in tqdm(dataloader, desc="Validating"):
+                features = features.to(device)
+                labels = labels.to(device)
+                
+                logits, _ = model(features)
+                loss = criterion(logits, labels)
+                
+                total_loss += loss.item()
+                preds = torch.argmax(logits, dim=-1).cpu().numpy()
+                all_preds.extend(preds)
+                all_labels.extend(labels.cpu().numpy())
+                
+                # Move tensors off GPU immediately
+                del logits, loss, features, labels
     
     avg_loss = total_loss / len(dataloader)
     accuracy = accuracy_score(all_labels, all_preds)
@@ -243,17 +349,35 @@ def main():
         default=PROCESSED_DATA_DIR / "cnn_lstm_model",
         help="Output directory for checkpoints",
     )
+    parser.add_argument(
+        "--resume-from",
+        type=str,
+        default=None,
+        help="Path to checkpoint to resume from (for transfer learning)",
+    )
     args = parser.parse_args()
     
     # Set random seed
     torch.manual_seed(RANDOM_SEED)
     np.random.seed(RANDOM_SEED)
     
-    # Device
-    if torch.cuda.is_available():
+    # Device - Use CPU for training to avoid MPS memory issues
+    # MPS has memory management issues with bidirectional LSTM
+    # CPU is slower but more stable for this model
+    use_cpu = os.environ.get("FORCE_CPU", "false").lower() == "true"
+    
+    if use_cpu:
+        device = torch.device("cpu")
+        print("Using device: cpu (forced via FORCE_CPU)")
+    elif torch.cuda.is_available():
         device = torch.device("cuda")
+        print(f"Using device: {device}")
     elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-        device = torch.device("mps")
+        # Check if we should use CPU instead due to memory issues
+        # MPS has known issues with bidirectional LSTM and memory accumulation
+        print("⚠ MPS available but has memory issues with bidirectional LSTM")
+        print("   Switching to CPU for stability (use FORCE_CPU=true to force CPU)")
+        device = torch.device("cpu")
     else:
         device = torch.device("cpu")
     print(f"Using device: {device}")
@@ -262,11 +386,25 @@ def main():
     label2id = {label: i for i, label in enumerate(CANONICAL_EMOTIONS)}
     id2label = {i: label for label, i in label2id.items()}
     
-    # Load data from split CSVs
+    # Load data from split CSVs (check multi-dataset first, then fallback to CREMA-D)
     print("Loading data from split CSVs...")
-    train_csv = SPLITS_DIR / "train.csv"
-    val_csv = SPLITS_DIR / "val.csv"
-    test_csv = SPLITS_DIR / "test.csv"
+    multi_dataset_dir = SPLITS_DIR / "multi_dataset"
+    if multi_dataset_dir.exists() and (multi_dataset_dir / "train.csv").exists():
+        print("  Using multi-dataset splits")
+        train_csv = multi_dataset_dir / "train.csv"
+        val_csv = multi_dataset_dir / "val.csv"
+        test_csv = multi_dataset_dir / "test.csv"
+    else:
+        print("  Using CREMA-D splits (multi-dataset not found)")
+        train_csv = SPLITS_DIR / "crema_d" / "train.csv"
+        val_csv = SPLITS_DIR / "crema_d" / "val.csv"
+        test_csv = SPLITS_DIR / "crema_d" / "test.csv"
+        
+        # Fallback to old location
+        if not train_csv.exists():
+            train_csv = SPLITS_DIR / "train.csv"
+            val_csv = SPLITS_DIR / "val.csv"
+            test_csv = SPLITS_DIR / "test.csv"
     
     if not train_csv.exists():
         raise FileNotFoundError(
@@ -285,19 +423,22 @@ def main():
     if test_dataset:
         print(f"Test: {len(test_dataset)} samples")
     
-    # Create dataloaders
+    # Create dataloaders - reduce num_workers for MPS to save memory
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=NUM_WORKERS,
+        num_workers=min(NUM_WORKERS, 2),  # Reduce workers for MPS
         collate_fn=collate_fn,
+        pin_memory=False,  # Disable pin_memory for MPS
     )
+    # Use much smaller batch size for validation to avoid MPS memory issues
+    val_batch_size = min(args.batch_size, 8)  # Cap at 8 for validation
     val_loader = DataLoader(
         val_dataset,
-        batch_size=args.batch_size,
+        batch_size=val_batch_size,
         shuffle=False,
-        num_workers=NUM_WORKERS,
+        num_workers=0,  # Disable multiprocessing for validation to save memory
         collate_fn=collate_fn,
     ) if val_dataset else None
     test_loader = DataLoader(
@@ -308,15 +449,57 @@ def main():
         collate_fn=collate_fn,
     ) if test_dataset else None
     
-    # Create model
-    cfg = CNNLSTMConfig(
-        num_labels=len(CANONICAL_EMOTIONS),
-        feature_dim=config.CNNLSTM_CONFIG["feature_dim"]
-    )
+    # Create model - use config from checkpoint if available, otherwise use defaults
+    checkpoint_data = None
+    if args.resume_from and Path(args.resume_from).exists():
+        checkpoint_path = Path(args.resume_from)
+        checkpoint_data = torch.load(checkpoint_path, map_location=device, weights_only=False)
+        if "config" in checkpoint_data:
+            ckpt_config = checkpoint_data["config"]
+            print(f"\n📋 Using config from checkpoint:")
+            print(f"   {ckpt_config}")
+            # Use checkpoint config directly - it has all the values we need
+            cfg = CNNLSTMConfig(
+                num_labels=ckpt_config.get("num_labels", len(CANONICAL_EMOTIONS)),
+                feature_dim=ckpt_config.get("feature_dim", 37),
+                cnn_channels=ckpt_config.get("cnn_channels", 64),
+                lstm_hidden=ckpt_config.get("lstm_hidden", 128),
+                lstm_layers=ckpt_config.get("lstm_layers", 2),
+                dropout=ckpt_config.get("dropout", 0.3),
+                use_batch_norm=ckpt_config.get("use_batch_norm", True),
+            )
+        else:
+            # Fallback to default config
+            cfg = CNNLSTMConfig(
+                num_labels=len(CANONICAL_EMOTIONS),
+                feature_dim=config.CNNLSTM_CONFIG["feature_dim"]
+            )
+    else:
+        cfg = CNNLSTMConfig(
+            num_labels=len(CANONICAL_EMOTIONS),
+            feature_dim=config.CNNLSTM_CONFIG["feature_dim"]
+        )
     model = CNNLSTMEmotionModel(cfg)
     model.to(device)
     
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
+    
+    # Load from checkpoint if specified (transfer learning)
+    start_epoch = 1
+    best_val_f1 = 0.0
+    if checkpoint_data is not None:
+        print(f"\n🔄 Loading checkpoint from: {checkpoint_path}")
+        # Load with strict=False to handle any minor architecture differences
+        missing_keys, unexpected_keys = model.load_state_dict(checkpoint_data["model_state_dict"], strict=False)
+        if missing_keys:
+            print(f"  ⚠ Missing keys: {len(missing_keys)}")
+        if unexpected_keys:
+            print(f"  ⚠ Unexpected keys (ignored): {len(unexpected_keys)}")
+        start_epoch = checkpoint_data.get("epoch", 1) + 1
+        best_val_f1 = checkpoint_data.get("best_macro_f1", checkpoint_data.get("val_metrics", {}).get("macro_f1", 0.0))
+        print(f"  ✓ Resumed from epoch {checkpoint_data.get('epoch', 'N/A')}")
+        print(f"  ✓ Previous best macro-F1: {best_val_f1:.4f}")
+        print(f"  ✓ Starting from epoch {start_epoch} (transfer learning)")
     
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss()
@@ -327,13 +510,12 @@ def main():
     
     # Training loop
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    best_val_f1 = 0.0
     
     print("\n" + "="*60)
     print("Starting Training")
     print("="*60)
     
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(start_epoch, args.epochs + 1):
         print(f"\nEpoch {epoch}/{args.epochs}")
         
         # Train

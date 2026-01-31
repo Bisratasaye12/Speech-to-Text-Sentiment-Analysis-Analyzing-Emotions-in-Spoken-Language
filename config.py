@@ -116,4 +116,44 @@ FUSION_CONFIG = {
     # Note: num_labels is determined from CANONICAL_EMOTIONS
 }
 
+# Multi-Dataset Configuration
+# Enable/disable datasets and specify their directories
+DATASET_CONFIG = {
+    "crema_d": {
+        "enabled": True,
+        "audio_dir": AUDIO_WAV_DIR,
+    },
+    "tess": {
+        "enabled": True,  # TESS dataset enabled
+        "audio_dir": RAW_DATA_DIR / "TESS",
+    },
+    "iemocap": {
+        "enabled": True,  # IEMOCAP dataset enabled
+        "audio_dir": RAW_DATA_DIR / "IEMOCAP",
+    },
+}
+
+# Dataset Balancing Configuration
+# Controls how samples are balanced across datasets and emotions
+BALANCING_CONFIG = {
+    # Strategy options:
+    # - "equal_per_dataset": Sample equal number from each dataset
+    # - "equal_per_emotion": Sample equal number per emotion across all datasets (RECOMMENDED for imbalanced data)
+    # - "proportional": Maintain natural dataset ratios but cap maximum
+    # - "stratified_per_dataset": Create stratified splits within each dataset, then combine
+    "strategy": "equal_per_emotion",  # Changed to balance emotions equally
+    
+    # Maximum samples per dataset (None = no limit, or int e.g., 5000)
+    # Only applies to "proportional" strategy
+    "max_samples_per_dataset": None,
+    
+    # Target samples per emotion class (caps all emotions to this size)
+    # Set to 800 to match the smallest emotion class size
+    "min_samples_per_emotion": 800,
+    
+    # Preserve original test split from CREMA-D if available
+    # If True, uses existing CREMA-D test split and only balances train/val
+    "preserve_test_split": False,
+}
+
 
